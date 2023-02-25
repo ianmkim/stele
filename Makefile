@@ -1,3 +1,6 @@
+run:
+	python3 stele/app.py
+
 setup: requirements.txt
 	pip3 install -r requirements.txt
 
@@ -9,8 +12,9 @@ clean-all:
 	mkdir data
 	touch data/.gitkeep
 	echo "." >> data/.gitkeep
+	mkdir data/country
+	touch data/country/.gitkeep
+	echo "." >> data/country/.gitkeep
 
-run:
-	python3 stele/app.py
 
 .PHONY: setup run clean clean-all
