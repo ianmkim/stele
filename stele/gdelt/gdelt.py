@@ -15,6 +15,8 @@ import operator
 
 import glob
 import pandas as pd
+import dask.dataframe as dd
+from dask.diagnostics import ProgressBar
 from pprint import pprint
 
 from tqdm import tqdm
@@ -100,31 +102,45 @@ class GDELT():
                 if in_major_fips:
                     outfile.write(line)
 
+    def load_serialized_data(self, path:str="output"):
+        if not os.path.isfile(self.data_path + path + "/part.0.parquet"):
+            print("No serialized data found")
+        return dd.read_parquet(self.data_path + path)
 
-    def serialize_data(self, outfile_name:str="gdelt.hdf"):
+    def serialize_data(self):
         colnames = pd.read_excel("gdelt_headers.xlsx", 
                                 sheet_name="Sheet1",
                                 index_col="Column ID")["Field Name"]
-        if os.path.isfile(self.data_path + outfile_name):
+        if os.path.isfile(self.data_path + "output/part.0.parquet"):
             return
         files = glob.glob(self.data_path + "country/" + self.fips_country_code + "*")
+        final_df = None
         list_dfs = []
-        for active_file in self.tqdm_c(files): 
-            record = pd.read_csv(active_file, 
+        for idx, active_file in enumerate(self.tqdm_c(files)):
+            record = dd.read_csv(active_file, 
                         sep="\t", 
                         header=None, 
                         dtype=str, 
-                        names=colnames, 
-                        index_col=["GLOBALEVENTID"])
+                        names=colnames).set_index("GLOBALEVENTID")
             list_dfs.append(record)
+            if idx % 300== 0:
+                if final_df is None:
+                    final_df = dd.multi.concat(list_dfs)
+                else:
+                    concatted = dd.multi.concat(list_dfs)
+                    final_df = dd.multi.concat([final_df, concatted])
+                list_dfs = []
 
-        print("starting concatenation")
-        final_df = pd.concat(list_dfs).astype(str, copy=False)
-        print("finished concatenation")
-        final_df.to_hdf(self.data_path + outfile_name,
-                        "dat",
-                        complevel=0,
-                        complib="zlib")
+        concatted = dd.concat(list_dfs)
+        final_df = dd.concat([final_df, concatted])
+        del concatted
+        del list_dfs
+
+        # threads - requires little memory < 16GB
+        # process - requires at least 64GB with 24 cores.
+        with ProgressBar():
+            final_df.to_parquet("data/output")
+
         """
         with open(self.data_path + outfile_name, "wb") as file:
             msgpack.pack(df_list, file, use_bin_type=True)
