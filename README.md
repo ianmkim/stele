@@ -2,20 +2,22 @@
 > A stele (/ˈstiːli/ STEE-lee), or occasionally stela (plural stelas or stelæ), when derived from Latin, is a stone or wooden slab. Stelae were occasionally erected as memorials to battles
 
 Stele is a project investigating the the trend of geopolitical events through classical Machine Learning algorithms. The aim is three-fold:
- 1. Distillation learning. Using the dataset already available, build better classifiers that work faster and with less input than the original models
+ 1. Distillation learning. Using the dataset already available, build better classifiers that work faster and with less input than the original models employed by the GDELT project.
  2. Predictive inference. Predict the course of future events.
  3. Bias investigation. Analyze the quality of sources to detect any aggregate or systematic bias against any given world power.
  
 ## Data Preparation
 ### GDELT
-Supported by Google Jigsaw, the [GDELT Project](https://www.gdeltproject.org) automatically scrapes and monitors broadcast, print, and web news globally in over 100 languages and identifies organizations, people, and other metrics about world events. The database is updated daily with all the events that happened on that day, often exceeding tens of thousands of lines per day. 
+Supported by Google Jigsaw, the [GDELT Project](https://www.gdeltproject.org) automatically scrapes and monitors broadcast, print, and web news globally in over 100 languages and identifies organizations, people, and other metrics about world events. The database is updated daily with all the events that happened on that day, often exceeding tens of thousands of events per day. 
 
 We're particularly interested in the following metrics in order to deeply understand the trend of world events and gain predictive/fundamental understanding powers: `ActorCode` which specify what country is acting on what country, the `ActorType` which specifies the kind of organization, `EventCode` which specifies kinds of events, `QuadClass` which indicates rough levels of cooperation and violence, the `GoldsteinScale` which more measures levels of violence along different axes, `NumMentions` which quantify the number of times the event was mentioned in all sources, `AvgTone` which indicates average sentiment among all sources, the `SOURCEURL`, and finally, various geographic data.
+
+The documentation for the full codebook can be found [here](http://data.gdeltproject.org/documentation/GDELT-Data_Format_Codebook.pdf)
 
 ### Memory Restraints & Parallel Processing
 A large part of this project was figuring out how to deal with the exceptionally large corpus. First attempts to keep the dataset in-memory failed miserably as the system eventually ran out of memory and SWAP available.
 
-We had to replace Pandas with Dask in order to explore the dataset in a fast, efficient, and high-throughput manner. Dask has a pandas and sklearn-like API and supports cross-compatibility for both libraries. However, it also provides functionality to break up dataframes into partitions and reads them from disk as needed. This retrieval can be performed in parallel. Additionally, computation can be performed all at once and only when its needed. Meaning I do not have to wait 2x the time if I wanted to load, then filter data. It would collapse the two tasks into one automatically, loading while filtering the data when `.compute()` is called.
+We had to replace Pandas with Dask in order to explore the dataset in a fast, efficient, and high-throughput manner. Dask has a pandas and sklearn-like API and supports cross-compatibility for both libraries. However, it also provides functionality to break up dataframes into partitions and reads them from disk as needed. This retrieval can be performed in parallel. Additionally, computation can be performed all at once and only when its needed. Meaning I do not have to wait 2x the time if I wanted to load, then filter data. Dask automatically collapses the two tasks into one, loading while filtering the data when `.compute()` is called.
 
 All of the code related to GDELT data collection, cleaning, saving, and partitioning can be found in `stele/gdelt/gdelt.py`
 
@@ -41,7 +43,7 @@ Multiclass Classification. Accuracy if randomly guessed: ~20%
 
 
 ### Predictive Inference
-The methods present in `regression.ipynb` tries to predict the number of events occuring in any given day given the number of events for the last 29 days. Predicting the 'busy-ness' of arbitrary days given the last couple days
+The methods present in `regression.ipynb` tries to predict the number of events occuring in any given day given the number of events for the last 29 days. Predicting the 'business' of arbitrary days given the previous 29 days. However, after realizing the amount of noise in the time-series data, we employed a simple moving average in order to reduce noise. What resulted was almost a 6x decrease in the Mean Squared Error compared to the same method with the same hyperparameters without an applied moving average.
 
 #### Methods Used
 | Method                             | MSE   |
@@ -54,6 +56,10 @@ The methods present in `regression.ipynb` tries to predict the number of events 
 
 ### Bias Investigations
 Methods present in the `clustering.ipynb` attempts to cluster events based on their journalistic reception (`AvgTone`), violence levels (`GoldsteinScale`), and destabilization level (`QuadClass`). Both DBSCAN and K-means clustering were used.
+
+A number of different feature construction methods were attempted. For instance, I tried clustering based on Tf-IDF vectors from source URLs similar to the previous two objectives. However, that clustering method would have been very difficult to clearly interpret, and certainly to interpret graphically. I also tried to construct a feature set based on multiple events by a single country in an attempt to cluster events by their actor countries. However, this lead to undistinct and hard to interpret results from both DBSCAN and K-Means clustering methods (no clear elbows in SSE scores). 
+
+So instead, we resorted to a clearly interpretable feature set of three variables which indicate conflict impact, violence level, and average tone of news stories covering the event.
 
 | Method  |
 |---------|
@@ -68,6 +74,8 @@ We save the data using a format called parquet, which is a de-facto industry sta
 
 Since some parts of the notebook require significant memory and compute power, I've listed the specifications of what this project was performed on:
 
+For future work, most computation should be accelerated using `cudf` and `cuml` packages which utilizes Nvidia GPUs.
+
 | Component | Spec        |
 |-----------|-------------|
 | CPU       | i9-12900K   |
@@ -76,7 +84,11 @@ Since some parts of the notebook require significant memory and compute power, I
 | MEM       | 128GB       |
 | SWAP      | 256GB       |
 
+in order to install the required libraries, run:
+```bash
+pip3 install -r requirements.txt
+```
 
-## Notes
+## Performance Notes for Data Prep
  - Saving data to Parquet took around 10 minutes on a 24core CPU
  - memory usage never exceeded durin the preparation stage up to 32GBs
