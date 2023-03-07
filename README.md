@@ -66,6 +66,8 @@ So instead, we resorted to a clearly interpretable feature set of three variable
 | DBSCAN  |
 | K-Means |
 
+## Results
+Though the nature of the analysis differed in all three aspects, for distillation and predictive learning objectives, we were able to find methods that could either correctly classify or predict the unknown variable with statistically significant non-random accuracy. Included metrics for analysis included accuracy, precision, recall, f1-scores as well as a ROC AUC scores and curves for both binary and multiclass classification tasks. For multiclass, we used a one vs rest strategy for calculating the ROC AUC scores and for classes where `predict_proba()` didn't exist, we used the `decision_function()` to output probabilities. 
 
 ## Requirements
 If you wish to start the data collection and preparation from scratch, a machine with at least 32GBs of RAM is recommended. If not, make sure to allocate a bunch of SWAP and expect to spend some time twiddling your thumbs. Because the dataset itself is quite large (27GBs uncompressed txt format), we used dask, a replacement for pandas that breaks down large dataframes into chunks and implements multi-core algorithms and lazy computation for faster compute. 
